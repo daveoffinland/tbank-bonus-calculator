@@ -3,7 +3,6 @@ const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,15 +10,12 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Create database directory
-if (!fs.existsSync('./database')) {
-  fs.mkdirSync('./database');
-}
-
-// Initialize SQLite database (Railway has persistent storage!)
-const db = new sqlite3.Database('./database/bonus_calculator.db');
+// Initialize SQLite database
+// Note: Heroku has ephemeral filesystem - database resets on restart
+// For production, consider using Heroku Postgres add-on
+const db = new sqlite3.Database(':memory:'); // Using in-memory for Heroku
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS bonus_rates (
@@ -65,7 +61,7 @@ app.get('/api/bonus-rates', (req, res) => {
 });
 
 app.post('/api/bonus-rates', (req, res) => {
-  console.log('POST /api/bonus-rates called');
+  console.log('POST /api/bonus-rates called with:', req.body);
   
   const { rates } = req.body;
   
@@ -104,7 +100,8 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    message: 'TBank Bonus Calculator running on Railway!' 
+    message: 'TBank Bonus Calculator running on Heroku!',
+    port: PORT
   });
 });
 
@@ -113,8 +110,14 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Error handling
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 TBank Bonus Calculator running on port ${PORT}`);
-  console.log(`🗄️ Database initialized`);
+  console.log(`🗄️ Database initialized (in-memory for Heroku)`);
 });
